@@ -2,15 +2,22 @@ let editor;
 let currentLanguage = 'undetected';
 let detectTimer = null;
 let isDarkTheme = true;
-
-// Add this at the top of the file
-const API_BASE_URL = 'http://127.0.0.1:8000/front';
+const API_BASE_URL = 'http://127.0.0.1:8000/front';  // Base URL without the '/front' suffix
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Set initial theme
+    initializeTheme();
+    initializeEditor();
+    setupSplitPane();
+    setupEventListeners();
+});
+
+function initializeTheme() {
     document.documentElement.setAttribute('data-theme', isDarkTheme ? 'dark' : 'light');
-    
-    // Initialize CodeMirror
+    const themeIcon = document.querySelector('#theme-toggle i');
+    themeIcon.className = isDarkTheme ? 'fas fa-moon' : 'fas fa-sun';
+}
+
+function initializeEditor() {
     editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
         lineNumbers: true,
         theme: isDarkTheme ? 'dracula' : 'default',
@@ -29,37 +36,34 @@ document.addEventListener('DOMContentLoaded', () => {
             "Shift-Tab": "indentLess"
         }
     });
-
-    // Force a refresh after initialization
     editor.refresh();
+}
 
-    // Initialize Split.js
+function setupSplitPane() {
     if (window.innerWidth > 768) {
         Split(['#split-container .editor-section', '#split-container .result-section'], {
             sizes: [60, 40],
             minSize: [300, 300],
             gutterSize: 10,
             snapOffset: 0,
-            onDragEnd: function() {
-                editor.refresh();
-            }
+            onDragEnd: () => editor.refresh()
         });
     }
+}
 
-    // Setup theme toggle with immediate effect
-    const themeToggle = document.getElementById('theme-toggle');
-    themeToggle.addEventListener('click', toggleTheme);
-    // Set initial icon
-    themeToggle.querySelector('i').className = isDarkTheme ? 'fas fa-moon' : 'fas fa-sun';
-
-    // Setup event listeners
+function setupEventListeners() {
+    // Theme toggle
+    document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+    
+    // Editor events
     editor.on('change', handleEditorChange);
+    
+    // Button events
     document.getElementById('run-btn').addEventListener('click', handleRunCode);
     document.getElementById('ai-debug-btn').addEventListener('click', () => {
         alert('AI Debug feature coming soon.');
     });
-
-    // Setup new event listeners
+    document.getElementById('show-tokens-btn').addEventListener('click', toggleTokenDisplay);
     document.getElementById('template-select').addEventListener('change', loadTemplate);
     document.getElementById('copy-code').addEventListener('click', copyCode);
     document.getElementById('clear-editor').addEventListener('click', clearEditor);
@@ -68,34 +72,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('upload-code').addEventListener('change', uploadCode);
     document.getElementById('font-increase').addEventListener('click', () => changeFontSize(1));
     document.getElementById('font-decrease').addEventListener('click', () => changeFontSize(-1));
-});
-
-// Add this function to handle window load
-window.addEventListener('load', () => {
-    setTimeout(() => {
-        editor.refresh();
-    }, 100);
-});
-
-// Add window resize handler
-window.addEventListener('resize', () => {
-    editor.refresh();
-});
+    
+    // Window events
+    window.addEventListener('load', () => setTimeout(() => editor.refresh(), 100));
+    window.addEventListener('resize', () => editor.refresh());
+}
 
 function toggleTheme() {
     isDarkTheme = !isDarkTheme;
-    
-    // Update document theme
     document.documentElement.setAttribute('data-theme', isDarkTheme ? 'dark' : 'light');
-    
-    // Update CodeMirror theme
     editor.setOption('theme', isDarkTheme ? 'dracula' : 'default');
-    
-    // Update button icon
-    const themeIcon = document.querySelector('#theme-toggle i');
-    themeIcon.className = isDarkTheme ? 'fas fa-moon' : 'fas fa-sun';
-    
-    // Force editor refresh to apply theme properly
+    document.querySelector('#theme-toggle i').className = isDarkTheme ? 'fas fa-moon' : 'fas fa-sun';
     setTimeout(() => editor.refresh(), 100);
 }
 
@@ -157,14 +144,45 @@ function updateEditorMode(language) {
     editor.setOption('mode', modeMap[language] || 'text/plain');
 }
 
+async function toggleTokenDisplay() {
+    const tokenDisplay = document.getElementById('token-display');
+    const tokenDetails = document.getElementById('token-details');
+    const button = document.getElementById('show-tokens-btn');
+    
+    try {
+        if (tokenDisplay.style.display === 'none') {
+            const response = await fetch(`${API_BASE_URL}/detect-language/`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ code: editor.getValue() })
+            });
 
-
-function showNotification(message) {
-    const notification = document.createElement('div');
-    notification.className = 'copy-success';
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    setTimeout(() => notification.remove(), 2000);
+            if (!response.ok) throw new Error('Token detection failed');
+            
+            const data = await response.json();
+            let html = `<p><strong>Detected Language:</strong> ${data.language}</p>`;
+            html += `<p><strong>All Tokens:</strong> ${data.all_tokens.join(', ')}</p>`;
+            
+            for (const [lang, tokens] of Object.entries(data.tokens)) {
+                if (tokens.length > 0) {
+                    html += `<p><strong>${lang.toUpperCase()} Tokens:</strong> ${tokens.join(', ')}</p>`;
+                }
+            }
+            
+            tokenDetails.innerHTML = html;
+            tokenDisplay.style.display = 'block';
+            button.textContent = 'Hide Tokens';
+        } else {
+            tokenDisplay.style.display = 'none';
+            button.textContent = 'Show Detected Tokens';
+        }
+    } catch (error) {
+        console.error('Token display error:', error);
+        showNotification('Failed to analyze tokens');
+    }
 }
 
 async function handleRunCode() {
@@ -173,19 +191,15 @@ async function handleRunCode() {
     const spinner = document.querySelector('.loading-spinner');
     
     spinner.classList.remove('hidden');
-    
-    if (currentLanguage === 'undetected') {
-        outputElement.textContent = 'Language undetected, cannot run the code.';
-        spinner.classList.add('hidden');
-        return;
-    }
-
     outputElement.textContent = 'Running...';
     
     try {
         const response = await fetch(`${API_BASE_URL}/run-code/`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
             body: JSON.stringify({
                 code,
                 language: currentLanguage
@@ -198,7 +212,7 @@ async function handleRunCode() {
         }
 
         const data = await response.json();
-        outputElement.textContent = data.output;
+        outputElement.textContent = data.output || data.error || 'No output';
 
         if (data.error && data.line) {
             editor.addLineClass(data.line - 1, 'background', 'error-line');
@@ -213,3 +227,35 @@ async function handleRunCode() {
         spinner.classList.add('hidden');
     }
 }
+
+// Helper functions
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function showNotification(message) {
+    const notification = document.createElement('div');
+    notification.className = 'copy-success';
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 2000);
+}
+
+// Placeholder functions for other features
+function loadTemplate() { /* ... */ }
+function copyCode() { /* ... */ }
+function clearEditor() { /* ... */ }
+function downloadCode() { /* ... */ }
+function uploadCode() { /* ... */ }
+function changeFontSize() { /* ... */ }

@@ -34,9 +34,12 @@
             <i class="fas fa-moon"></i>
         </button>
     </header>
+
+    
     
     <main id="split-container">
         <div class="editor-section split">
+
             <textarea id="code-editor" placeholder="Write your code here..."></textarea>
         </div>
         
@@ -47,6 +50,15 @@
                     <span id="detected-language">None</span>
                 </div>
             </div>
+
+            <!-- Add this button anywhere in your template -->
+        <button id="show-tokens-btn" class="btn btn-info">Show Detected Tokens</button>
+
+            <!-- Token display area (hidden by default) -->
+        <div id="token-display" class="output-area" style="display: none;">
+            <h3>Token Analysis <span class="loading-spinner hidden"></span></h3>
+            <div id="token-details"></div>
+        </div>
             
             <div class="buttons">
                 <button id="run-btn" disabled>

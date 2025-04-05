@@ -1,4 +1,3 @@
-
 from django.shortcuts import render
 from django.http import HttpResponse
 import json
@@ -9,77 +8,84 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 import re
-# Create your views here.
+
+# Define token sets at module level
+COMMON_TOKENS = {
+    'keywords': {'if', 'else', 'for', 'while', 'return', 'break', 'continue'},
+    'operators': {'+', '-', '*', '/', '%', '=', '==', '!=', '<', '>', '<=', '>='},
+    'symbols': {'(', ')', '{', '}', '[', ']', ';', ',', '.'}
+}
+
+PYTHON_TOKENS = {
+    'keywords': {'def', 'lambda', 'class', 'import', 'from', 'as', 'try', 'except', 
+                 'finally', 'with', 'yield', 'elif', 'not', 'in', 'is', 'and', 'or', 
+                 'nonlocal', 'global', 'True', 'False', 'None', 'async', 'await', 'print'},
+    'operators': {'**', '//', ':=', '@'},
+    'symbols': {':', '->', '#', '"""', "'''"}
+}
+
+JAVA_TOKENS = {
+    'keywords': {'public', 'private', 'protected', 'static', 'void', 'main', 'String', 
+                'class', 'extends', 'implements', 'interface', 'new', 'this', 'super',
+                'throws', 'try', 'catch', 'finally', 'int', 'boolean', 'float', 'double'},
+    'operators': {'++', '--', 'instanceof'},
+    'symbols': {'@'},
+    'patterns': [r'System\.out\.println', r'public\s+class']
+}
+
+CPP_TOKENS = {
+    'keywords': {'public', 'private', 'protected', 'using', 'namespace', 'cout', 'cin', 
+                'endl', 'template', 'typename', 'constexpr', 'auto', 'decltype', 
+                'noexcept', 'nullptr', 'const_cast', 'dynamic_cast', 'reinterpret_cast', 
+                'static_cast', 'virtual', 'override', 'friend', 'operator', 'inline', 
+                'mutable', 'explicit', 'typedef', 'union', 'goto', 'wchar_t'},
+    'operators': {'->', '::', '<<', '>>', '.*', '->*'},
+    'symbols': {'#include', '/*', '*/'}
+}
 
 def index(request):
     return HttpResponse("Hello World!")
 
 def main(request):
-    return render(request,"front/main.html")
+    return render(request, "front/main.html")
+
+def tokenize(code):
+    """Tokenize the input code"""
+    code = re.sub(r'"[^"]*"', ' STRING ', code)
+    code = re.sub(r"'[^']*'", ' STRING ', code)
+    code = re.sub(r'//.*', ' ', code)
+    code = re.sub(r'/\*.*?\*/', ' ', code, flags=re.DOTALL)
+    return re.findall(r'[a-zA-Z_][\w:]*|\d+\.?\d*|\S', code)
+
+def is_python_token(token):
+    """Check if token is Python-specific"""
+    return (token in PYTHON_TOKENS['keywords'] or 
+            token in PYTHON_TOKENS['operators'] or 
+            token in PYTHON_TOKENS['symbols'])
+
+def is_java_token(token):
+    """Check if token is Java-specific"""
+    if (token in JAVA_TOKENS['keywords'] or 
+        token in JAVA_TOKENS['operators'] or 
+        token in JAVA_TOKENS['symbols']):
+        return True
+    # Check patterns in the original code if needed
+    return False
+
+def is_cpp_token(token):
+    """Check if token is C++-specific"""
+    return (token in CPP_TOKENS['keywords'] or 
+            token in CPP_TOKENS['operators'] or 
+            token in CPP_TOKENS['symbols'])
+
+def is_common_token(token):
+    """Check if token is common to all languages"""
+    return (token in COMMON_TOKENS['keywords'] or 
+            token in COMMON_TOKENS['operators'] or 
+            token in COMMON_TOKENS['symbols'])
 
 def detect_language(code):
     """Detect programming language using lexical analysis"""
-    # Lexical token definitions (same as original)
-    common_tokens = {
-        'keywords': {'if', 'else', 'for', 'while', 'return', 'break', 'continue'},
-        'operators': {'+', '-', '*', '/', '%', '=', '==', '!=', '<', '>', '<=', '>='},
-        'symbols': {'(', ')', '{', '}', '[', ']', ';', ',', '.'}
-    }
-    
-    python_tokens = {
-        'keywords': {'def', 'lambda', 'class', 'import', 'from', 'as', 'try', 'except', 
-                     'finally', 'with', 'yield', 'elif', 'not', 'in', 'is', 'and', 'or', 
-                     'nonlocal', 'global', 'True', 'False', 'None', 'async', 'await', 'print'},
-        'operators': {'**', '//', ':=', '@'},
-        'symbols': {':', '->', '#', '"""', "'''"}
-    }
-    
-    java_tokens = {
-        'keywords': {'public', 'private', 'protected', 'static', 'void', 'main', 'String', 
-                    'class', 'extends', 'implements', 'interface', 'new', 'this', 'super',
-                    'throws', 'try', 'catch', 'finally', 'int', 'boolean', 'float', 'double'},
-        'operators': {'++', '--', 'instanceof'},
-        'symbols': {'@'},
-        'patterns': [r'System\.out\.println', r'public\s+class']  # NEW: Pattern matching
-    }
-    
-    cpp_tokens = {
-        'keywords': {'public', 'private', 'protected', 'using', 'namespace', 'cout', 'cin', 
-                    'endl', 'template', 'typename', 'constexpr', 'auto', 'decltype', 
-                    'noexcept', 'nullptr', 'const_cast', 'dynamic_cast', 'reinterpret_cast', 
-                    'static_cast', 'virtual', 'override', 'friend', 'operator', 'inline', 
-                    'mutable', 'explicit', 'typedef', 'union', 'goto', 'wchar_t'},
-        'operators': {'->', '::', '<<', '>>', '.*', '->*'},
-        'symbols': {'#include', '/*', '*/'}
-    }
-
-    # Tokenize function
-    def tokenize(code):
-        code = re.sub(r'"[^"]*"', ' STRING ', code)
-        code = re.sub(r"'[^']*'", ' STRING ', code)
-        code = re.sub(r'//.*', ' ', code)
-        code = re.sub(r'/\*.*?\*/', ' ', code, flags=re.DOTALL)
-        return re.findall(r'[a-zA-Z_][\w:]*|\d+\.?\d*|\S', code)
-
-    # Classification functions
-    def is_python_token(token):
-        return (token in python_tokens['keywords'] or 
-                token in python_tokens['operators'] or 
-                token in python_tokens['symbols'])
-
-    def is_java_token(token):
-        # Check basic tokens
-        if (token in java_tokens['keywords'] or 
-            token in java_tokens['operators'] or 
-            token in java_tokens['symbols']):
-            return True
-
-    def is_cpp_token(token):
-        return (token in cpp_tokens['keywords'] or 
-                token in cpp_tokens['operators'] or 
-                token in cpp_tokens['symbols'])
-
-    # Main detection logic
     tokens = tokenize(code)
     counts = {'python': 0, 'java': 0, 'cpp': 0}
 
@@ -102,7 +108,6 @@ def detect_language(code):
     else:
         return 'cpp'
 
-
 @csrf_exempt
 @require_http_methods(["POST"])
 def detect_language_view(request):
@@ -110,7 +115,18 @@ def detect_language_view(request):
         data = json.loads(request.body)
         code = data.get('code', '')
         language = detect_language(code)
-        return JsonResponse({'language': language})
+        tokens = tokenize(code)
+        token_groups = {
+            'python': [t for t in tokens if is_python_token(t)],
+            'java': [t for t in tokens if is_java_token(t)],
+            'cpp': [t for t in tokens if is_cpp_token(t)],
+            'common': [t for t in tokens if is_common_token(t)]
+        }
+        return JsonResponse({
+            'language': language,
+            'tokens': token_groups,
+            'all_tokens': tokens
+        })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
@@ -134,7 +150,6 @@ def run_code_view(request):
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
-
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -166,7 +181,6 @@ def run_cpp(code):
             f.write(code)
         
         try:
-            # Compile
             compile_result = subprocess.run(
                 ['g++', cpp_file, '-o', output_file],
                 capture_output=True,
@@ -175,7 +189,6 @@ def run_cpp(code):
             if compile_result.returncode != 0:
                 return {'error': f'Compilation error:\n{compile_result.stderr}'}
             
-            # Run
             run_result = subprocess.run(
                 [output_file],
                 capture_output=True,
@@ -198,7 +211,6 @@ def run_java(code):
             f.write(code)
         
         try:
-            # Compile
             compile_result = subprocess.run(
                 ['javac', java_file],
                 capture_output=True,
@@ -207,7 +219,6 @@ def run_java(code):
             if compile_result.returncode != 0:
                 return {'error': f'Compilation error:\n{compile_result.stderr}'}
             
-            # Run
             run_result = subprocess.run(
                 ['java', '-cp', tmp_dir, 'Main'],
                 capture_output=True,
@@ -220,4 +231,4 @@ def run_java(code):
         except subprocess.TimeoutExpired:
             return {'error': 'Execution timed out'}
         except Exception as e:
-            return {'error': str(e)}    
+            return {'error': str(e)}

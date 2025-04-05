@@ -305,3 +305,27 @@ button {
     80% { opacity: 1; transform: translateY(0); }
     100% { opacity: 0; transform: translateY(-20px); }
 }
+
+/* Style the token display */
+#token-display {
+    font-family: monospace;
+    border: 1px solid #ddd;
+}
+
+#token-display p {
+    margin-bottom: 8px;
+}
+
+#show-tokens-btn {
+    margin: 10px 0;
+    padding: 8px 15px;
+    background-color: #17a2b8;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#show-tokens-btn:hover {
+    background-color: #138496;
+}
