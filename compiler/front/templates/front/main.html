@@ -5,7 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Language Detector and Executor</title>
+    <title>AI-Powered Code Language Detector and Executor</title>
     
     <!-- CodeMirror CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
@@ -20,6 +20,114 @@
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <style>
+        /* AI Features Styles */
+        .ai-buttons {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: var(--bg-primary);
+            border-radius: 8px;
+        }
+
+        .ai-buttons h4 {
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .ai-button-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+
+        .ai-btn {
+            padding: 0.5rem 1rem;
+            background-color: var(--accent-primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .ai-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .ai-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .translate-section {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: var(--bg-primary);
+            border-radius: 8px;
+        }
+
+        .translate-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        #target-language {
+            padding: 0.5rem;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--accent-secondary);
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .ai-response-area {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        #ai-content {
+            white-space: pre-wrap;
+            font-family: 'Fira Code', monospace;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        #ai-response h3 {
+            color: var(--accent-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .ai-loading {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--accent-secondary);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @media (max-width: 768px) {
+            .ai-button-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
 
     <!-- Additional CDN Links -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
@@ -29,17 +137,14 @@
 </head>
 <body>
     <header>
-        <h1>Code Language Detector and Executor</h1>
+        <h1>AI-Powered Code Language Detector and Executor</h1>
         <button id="theme-toggle" aria-label="Toggle theme">
             <i class="fas fa-moon"></i>
         </button>
     </header>
 
-    
-    
     <main id="split-container">
         <div class="editor-section split">
-
             <textarea id="code-editor" placeholder="Write your code here..."></textarea>
         </div>
         
@@ -51,27 +156,75 @@
                 </div>
             </div>
 
-            <!-- Add this button anywhere in your template -->
-        <button id="show-tokens-btn" class="btn btn-info">Show Detected Tokens</button>
-
-            <!-- Token display area (hidden by default) -->
-        <div id="token-display" class="output-area" style="display: none;">
-            <h3>Token Analysis <span class="loading-spinner hidden"></span></h3>
-            <div id="token-details"></div>
-        </div>
-            
+            <!-- Primary Action Buttons -->
             <div class="buttons">
                 <button id="run-btn" disabled>
                     <i class="fas fa-play"></i> Run Code
                 </button>
-                <button id="ai-debug-btn" title="Feature coming soon">
-                    <i class="fas fa-robot"></i> AI Debug
+                <button id="show-tokens-btn" class="btn btn-info">
+                    <i class="fas fa-tags"></i> Show Tokens
                 </button>
             </div>
+
+            <!-- AI Feature Buttons -->
+            <div class="ai-buttons">
+                <h4>AI Assistant Features</h4>
+                <div class="ai-button-grid">
+                    <button id="ai-explain-btn" class="ai-btn" disabled>
+                        <i class="fas fa-book"></i> Explain Code
+                    </button>
+                    <button id="ai-review-btn" class="ai-btn" disabled>
+                        <i class="fas fa-search"></i> Review Code
+                    </button>
+                    <button id="ai-debug-btn" class="ai-btn" disabled>
+                        <i class="fas fa-bug"></i> Debug Code
+                    </button>
+                    <button id="ai-fix-btn" class="ai-btn" disabled>
+                        <i class="fas fa-wrench"></i> Fix Errors
+                    </button>
+                    <button id="ai-optimize-btn" class="ai-btn" disabled>
+                        <i class="fas fa-rocket"></i> Optimize
+                    </button>
+                    <button id="ai-complete-btn" class="ai-btn" disabled>
+                        <i class="fas fa-magic"></i> Complete
+                    </button>
+                    <button id="ai-complexity-btn" class="ai-btn" disabled>
+                        <i class="fas fa-chart-line"></i> Time Complexity
+                    </button>
+                </div>
+            </div>
+
+            <!-- Code Translation -->
+            <div class="translate-section">
+                <h4>Translate Code</h4>
+                <div class="translate-controls">
+                    <select id="target-language">
+                        <option value="python">To Python</option>
+                        <option value="java">To Java</option>
+                        <option value="cpp">To C++</option>
+                    </select>
+                    <button id="ai-translate-btn" class="ai-btn" disabled>
+                        <i class="fas fa-language"></i> Translate
+                    </button>
+                </div>
+            </div>
+
+            <!-- Token display area (hidden by default) -->
+            <div id="token-display" class="output-area" style="display: none;">
+                <h3>Token Analysis <span class="loading-spinner hidden"></span></h3>
+                <div id="token-details"></div>
+            </div>
             
+            <!-- Output area -->
             <div class="output-area">
                 <h3>Output <span class="loading-spinner hidden"></span></h3>
                 <pre id="output">Write some code and click Run to see the output.</pre>
+            </div>
+
+            <!-- AI Response area (integrated in the same view) -->
+            <div id="ai-response" class="output-area" style="display: none;">
+                <h3><span id="ai-response-title">AI Assistant</span> <span class="ai-loading hidden"></span></h3>
+                <pre id="ai-content"></pre>
             </div>
         </div>
     </main>

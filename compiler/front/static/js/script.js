@@ -2,7 +2,7 @@ let editor;
 let currentLanguage = 'undetected';
 let detectTimer = null;
 let isDarkTheme = true;
-const API_BASE_URL = 'http://127.0.0.1:8000/front';  // Base URL without the '/front' suffix
+const API_BASE_URL = 'http://127.0.0.1:8000/front';
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeTheme();
@@ -60,18 +60,29 @@ function setupEventListeners() {
     
     // Button events
     document.getElementById('run-btn').addEventListener('click', handleRunCode);
-    document.getElementById('ai-debug-btn').addEventListener('click', () => {
-        alert('AI Debug feature coming soon.');
-    });
     document.getElementById('show-tokens-btn').addEventListener('click', toggleTokenDisplay);
-    document.getElementById('template-select').addEventListener('change', loadTemplate);
-    document.getElementById('copy-code').addEventListener('click', copyCode);
-    document.getElementById('clear-editor').addEventListener('click', clearEditor);
-    document.getElementById('download-code').addEventListener('click', downloadCode);
-    document.getElementById('upload-btn').addEventListener('click', () => document.getElementById('upload-code').click());
-    document.getElementById('upload-code').addEventListener('change', uploadCode);
-    document.getElementById('font-increase').addEventListener('click', () => changeFontSize(1));
-    document.getElementById('font-decrease').addEventListener('click', () => changeFontSize(-1));
+    
+    // AI feature buttons
+    document.getElementById('ai-explain-btn').addEventListener('click', () => handleAIFeature('explain'));
+    document.getElementById('ai-review-btn').addEventListener('click', () => handleAIFeature('review'));
+    document.getElementById('ai-debug-btn').addEventListener('click', () => handleAIFeature('debug'));
+    document.getElementById('ai-fix-btn').addEventListener('click', () => handleAIFeature('fix'));
+    document.getElementById('ai-optimize-btn').addEventListener('click', () => handleAIFeature('optimize'));
+    document.getElementById('ai-complete-btn').addEventListener('click', () => handleAIFeature('complete'));
+    document.getElementById('ai-complexity-btn').addEventListener('click', () => handleAIFeature('complexity'));
+    document.getElementById('ai-translate-btn').addEventListener('click', handleTranslateCode);
+    
+    // No close button needed anymore since responses show inline
+    
+    // Template and other controls
+    document.getElementById('template-select')?.addEventListener('change', loadTemplate);
+    document.getElementById('copy-code')?.addEventListener('click', copyCode);
+    document.getElementById('clear-editor')?.addEventListener('click', clearEditor);
+    document.getElementById('download-code')?.addEventListener('click', downloadCode);
+    document.getElementById('upload-btn')?.addEventListener('click', () => document.getElementById('upload-code')?.click());
+    document.getElementById('upload-code')?.addEventListener('change', uploadCode);
+    document.getElementById('font-increase')?.addEventListener('click', () => changeFontSize(1));
+    document.getElementById('font-decrease')?.addEventListener('click', () => changeFontSize(-1));
     
     // Window events
     window.addEventListener('load', () => setTimeout(() => editor.refresh(), 100));
@@ -93,6 +104,7 @@ function handleEditorChange() {
     if (code.trim() === '') {
         updateLanguageDisplay('None');
         setEditorMode('text/plain');
+        updateAIButtonsState(false);
         return;
     }
 
@@ -120,13 +132,22 @@ async function detectLanguage(code) {
         currentLanguage = data.language;
         updateLanguageDisplay(currentLanguage);
         updateEditorMode(currentLanguage);
-        document.getElementById('run-btn').disabled = currentLanguage === 'undetected';
+        
+        const isEnabled = currentLanguage !== 'undetected';
+        document.getElementById('run-btn').disabled = !isEnabled;
+        updateAIButtonsState(isEnabled);
     } catch (error) {
         updateLanguageDisplay('Error detecting language');
         console.error('Language detection error:', error);
+        updateAIButtonsState(false);
     } finally {
         langBadge.classList.remove('detecting');
     }
+}
+
+function updateAIButtonsState(enabled) {
+    const aiButtons = document.querySelectorAll('.ai-btn');
+    aiButtons.forEach(btn => btn.disabled = !enabled);
 }
 
 function updateLanguageDisplay(language) {
@@ -174,10 +195,10 @@ async function toggleTokenDisplay() {
             
             tokenDetails.innerHTML = html;
             tokenDisplay.style.display = 'block';
-            button.textContent = 'Hide Tokens';
+            button.innerHTML = '<i class="fas fa-tags"></i> Hide Tokens';
         } else {
             tokenDisplay.style.display = 'none';
-            button.textContent = 'Show Detected Tokens';
+            button.innerHTML = '<i class="fas fa-tags"></i> Show Tokens';
         }
     } catch (error) {
         console.error('Token display error:', error);
@@ -228,6 +249,136 @@ async function handleRunCode() {
     }
 }
 
+async function handleAIFeature(feature) {
+    const code = editor.getValue();
+    if (!code.trim()) {
+        showNotification('Please write some code first');
+        return;
+    }
+
+    const aiResponse = document.getElementById('ai-response');
+    const aiContent = document.getElementById('ai-content');
+    const aiLoading = document.querySelector('.ai-loading');
+    const aiTitle = document.getElementById('ai-response-title');
+    
+    // Update title based on feature
+    const titles = {
+        'explain': 'Code Explanation',
+        'review': 'Code Review',
+        'debug': 'Debug Analysis',
+        'fix': 'Bug Fix Suggestions',
+        'optimize': 'Optimization Suggestions',
+        'complete': 'Code Completion',
+        'complexity': 'Time & Space Complexity'
+    };
+    
+    aiTitle.textContent = titles[feature] || 'AI Assistant';
+    aiResponse.style.display = 'block';
+    aiContent.textContent = 'Processing...';
+    aiLoading.classList.remove('hidden');
+
+    const endpoints = {
+        'explain': '/ai-explain/',
+        'review': '/ai-review/',
+        'debug': '/ai-debug/',
+        'fix': '/ai-fix/',
+        'optimize': '/ai-optimize/',
+        'complete': '/ai-complete/',
+        'complexity': '/ai-complexity/'
+    };
+
+    try {
+        const body = { code, language: currentLanguage };
+        
+        // If debug feature, include any error output
+        if (feature === 'debug' || feature === 'fix') {
+            const errorOutput = document.getElementById('output').textContent;
+            if (errorOutput && errorOutput !== 'Write some code and click Run to see the output.') {
+                body.error = errorOutput;
+            }
+        }
+
+        const response = await fetch(`${API_BASE_URL}${endpoints[feature]}`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'AI request failed');
+        }
+
+        const data = await response.json();
+        const responseKey = {
+            'explain': 'explanation',
+            'review': 'review',
+            'debug': 'debug_info',
+            'fix': 'fix',
+            'optimize': 'optimization',
+            'complete': 'completion',
+            'complexity': 'complexity'
+        }[feature];
+
+        aiContent.textContent = data[responseKey] || 'No response received';
+    } catch (error) {
+        aiContent.textContent = `Error: ${error.message}`;
+        console.error('AI feature error:', error);
+    } finally {
+        aiLoading.classList.add('hidden');
+    }
+}
+
+async function handleTranslateCode() {
+    const code = editor.getValue();
+    if (!code.trim()) {
+        showNotification('Please write some code first');
+        return;
+    }
+
+    const targetLanguage = document.getElementById('target-language').value;
+    const aiResponse = document.getElementById('ai-response');
+    const aiContent = document.getElementById('ai-content');
+    const aiLoading = document.querySelector('.ai-loading');
+    const aiTitle = document.getElementById('ai-response-title');
+    
+    aiTitle.textContent = `Translation to ${targetLanguage.toUpperCase()}`;
+    aiResponse.style.display = 'block';
+    aiContent.textContent = 'Translating...';
+    aiLoading.classList.remove('hidden');
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/ai-translate/`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                code,
+                source_language: currentLanguage,
+                target_language: targetLanguage
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Translation failed');
+        }
+
+        const data = await response.json();
+        aiContent.textContent = data.translation || 'No translation received';
+    } catch (error) {
+        aiContent.textContent = `Error: ${error.message}`;
+        console.error('Translation error:', error);
+    } finally {
+        aiLoading.classList.add('hidden');
+    }
+}
+
 // Helper functions
 function getCookie(name) {
     let cookieValue = null;
@@ -253,9 +404,59 @@ function showNotification(message) {
 }
 
 // Placeholder functions for other features
-function loadTemplate() { /* ... */ }
-function copyCode() { /* ... */ }
-function clearEditor() { /* ... */ }
-function downloadCode() { /* ... */ }
-function uploadCode() { /* ... */ }
-function changeFontSize() { /* ... */ }
+function loadTemplate() { 
+    const template = document.getElementById('template-select').value;
+    if (template) {
+        // Add template loading logic here
+        showNotification('Template feature coming soon');
+    }
+}
+
+function copyCode() { 
+    const code = editor.getValue();
+    if (code) {
+        navigator.clipboard.writeText(code).then(() => {
+            showNotification('Code copied to clipboard');
+        });
+    }
+}
+
+function clearEditor() { 
+    if (confirm('Are you sure you want to clear the editor?')) {
+        editor.setValue('');
+        showNotification('Editor cleared');
+    }
+}
+
+function downloadCode() { 
+    const code = editor.getValue();
+    if (code) {
+        const blob = new Blob([code], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `code.${currentLanguage === 'undetected' ? 'txt' : currentLanguage}`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        showNotification('Code downloaded');
+    }
+}
+
+function uploadCode(event) { 
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            editor.setValue(e.target.result);
+            showNotification('File uploaded successfully');
+        };
+        reader.readAsText(file);
+    }
+}
+
+function changeFontSize(delta) { 
+    const currentSize = parseInt(window.getComputedStyle(document.querySelector('.CodeMirror')).fontSize);
+    const newSize = Math.max(10, Math.min(24, currentSize + delta));
+    document.querySelector('.CodeMirror').style.fontSize = newSize + 'px';
+    editor.refresh();
+}

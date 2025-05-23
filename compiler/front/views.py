@@ -8,6 +8,12 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 import re
+import google.generativeai as genai
+
+# Configure Gemini API
+GEMINI_API_KEY = "AIzaSyDWdSNJmFYHdDCFTaHqINpUUvcgMTkT9nk"  # Replace with your actual API key
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 # Define token sets at module level
 COMMON_TOKENS = {
@@ -69,7 +75,6 @@ def is_java_token(token):
         token in JAVA_TOKENS['operators'] or 
         token in JAVA_TOKENS['symbols']):
         return True
-    # Check patterns in the original code if needed
     return False
 
 def is_cpp_token(token):
@@ -153,8 +158,194 @@ def run_code_view(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def ai_explain_code(request):
+    """AI explains what the code does"""
+    try:
+        data = json.loads(request.body)
+        code = data.get('code', '')
+        language = data.get('language', 'undetected')
+        
+        prompt = f"""Explain this {language} code in 3-4 concise sentences. Focus only on what it does and its main purpose.
+        
+        Code:
+        ```{language}
+        {code}
+        ```"""
+        
+        response = model.generate_content(prompt)
+        return JsonResponse({'explanation': response.text})
+    except Exception as e:
+        return JsonResponse({'error': f'AI explanation failed: {str(e)}'}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ai_review_code(request):
+    """AI reviews code for best practices and issues"""
+    try:
+        data = json.loads(request.body)
+        code = data.get('code', '')
+        language = data.get('language', 'undetected')
+        
+        prompt = f"""Review this {language} code. Provide a brief analysis in bullet points (max 5 points):
+        
+        Code:
+        ```{language}
+        {code}
+        ```
+        
+        Focus on: code quality, potential bugs, performance issues. Be concise."""
+        
+        response = model.generate_content(prompt)
+        return JsonResponse({'review': response.text})
+    except Exception as e:
+        return JsonResponse({'error': f'AI review failed: {str(e)}'}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ai_fix_code(request):
+    """AI suggests bug fixes"""
+    try:
+        data = json.loads(request.body)
+        code = data.get('code', '')
+        language = data.get('language', 'undetected')
+        error = data.get('error', '')
+        
+        prompt = f"""Fix this {language} code. Be concise.
+        
+        Code:
+        ```{language}
+        {code}
+        ```
+        
+        {f"Error: {error}" if error else ""}
+        
+        Provide: 1) What's wrong (1 line), 2) Fixed code, 3) Key change (1 line)"""
+        
+        response = model.generate_content(prompt)
+        return JsonResponse({'fix': response.text})
+    except Exception as e:
+        return JsonResponse({'error': f'AI fix failed: {str(e)}'}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ai_optimize_code(request):
+    """AI suggests code optimizations"""
+    try:
+        data = json.loads(request.body)
+        code = data.get('code', '')
+        language = data.get('language', 'undetected')
+        
+        prompt = f"""Optimize this {language} code. Be concise.
+        
+        Code:
+        ```{language}
+        {code}
+        ```
+        
+        Provide: 1) Main optimization (1-2 lines), 2) Optimized code, 3) Performance gain"""
+        
+        response = model.generate_content(prompt)
+        return JsonResponse({'optimization': response.text})
+    except Exception as e:
+        return JsonResponse({'error': f'AI optimization failed: {str(e)}'}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ai_complete_code(request):
+    """AI suggests code completion"""
+    try:
+        data = json.loads(request.body)
+        code = data.get('code', '')
+        language = data.get('language', 'undetected')
+        
+        prompt = f"""Complete this {language} code with the most logical next lines (max 5 lines).
+        
+        Code:
+        ```{language}
+        {code}
+        ```
+        
+        Provide only the code to add, no explanation."""
+        
+        response = model.generate_content(prompt)
+        return JsonResponse({'completion': response.text})
+    except Exception as e:
+        return JsonResponse({'error': f'AI completion failed: {str(e)}'}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ai_complexity_analysis(request):
+    """AI analyzes time and space complexity"""
+    try:
+        data = json.loads(request.body)
+        code = data.get('code', '')
+        language = data.get('language', 'undetected')
+        
+        prompt = f"""Analyze the time and space complexity of this {language} code. Be precise and concise.
+        
+        Code:
+        ```{language}
+        {code}
+        ```
+        
+        Provide:
+        1. Time Complexity: O(?) with brief reason
+        2. Space Complexity: O(?) with brief reason
+        3. Best/Worst case if different (optional)
+        Keep it under 5 lines total."""
+        
+        response = model.generate_content(prompt)
+        return JsonResponse({'complexity': response.text})
+    except Exception as e:
+        return JsonResponse({'error': f'Complexity analysis failed: {str(e)}'}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ai_translate_code(request):
+    """AI translates code to another language"""
+    try:
+        data = json.loads(request.body)
+        code = data.get('code', '')
+        source_language = data.get('source_language', 'undetected')
+        target_language = data.get('target_language', 'python')
+        
+        prompt = f"""Translate this {source_language} code to {target_language}. Provide only the translated code with minimal comments.
+        
+        Code:
+        ```{source_language}
+        {code}
+        ```"""
+        
+        response = model.generate_content(prompt)
+        return JsonResponse({'translation': response.text})
+    except Exception as e:
+        return JsonResponse({'error': f'AI translation failed: {str(e)}'}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def ai_debug_view(request):
-    return JsonResponse({'message': 'AI debugging feature coming soon'})
+    """Enhanced AI debugging with error analysis"""
+    try:
+        data = json.loads(request.body)
+        code = data.get('code', '')
+        language = data.get('language', 'undetected')
+        error_output = data.get('error', '')
+        
+        prompt = f"""Debug this {language} code concisely.
+        
+        Code:
+        ```{language}
+        {code}
+        ```
+        
+        Error: {error_output}
+        
+        Provide: 1) Issue (1 line), 2) Fix (show code), 3) Prevention tip (1 line)"""
+        
+        response = model.generate_content(prompt)
+        return JsonResponse({'debug_info': response.text})
+    except Exception as e:
+        return JsonResponse({'error': f'AI debugging failed: {str(e)}'}, status=400)
 
 def run_python(code):
     try:
